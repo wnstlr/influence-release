@@ -33,8 +33,8 @@ class CIFAR_MLP(GenericNeuralNet):
     def get_all_params(self):
         all_params = []
         for layer in ['fc1', 'fc2', 'fc3']:        
-            for var_name in ['kernel', 'bias']:
-                temp_tensor = tf.get_default_graph().get_tensor_by_name("%s/dense/%s:0" % (layer, var_name))            
+            for var_name in ['weights', 'biases']:
+                temp_tensor = tf.get_default_graph().get_tensor_by_name("%s/%s:0" % (layer, var_name))            
                 all_params.append(temp_tensor)      
         return all_params        
 
@@ -59,28 +59,55 @@ class CIFAR_MLP(GenericNeuralNet):
         return input_placeholder, labels_placeholder
 
 
-    def inference(self, input_x):        
-        # First FC layer
+    def inference(self, input_x):
+        # first fc layer
         with tf.variable_scope('fc1'):
-            hidden = tf.layers.dense(input_x, 4096, activation=tf.nn.relu,
-                                     kernel_initializer=tf.contrib.layers.xavier_initializer())
-        # Dropout
+            weights1 = variable(
+                'weights', 
+                [self.input_dim * 4096],
+                tf.contrib.layers.xavier_initializer())            
+            biases1 = variable(
+                'biases',
+                [4096],
+                tf.constant_initializer(0.0))
+
+            hidden = tf.matmul(input_x, tf.reshape(weights1, [self.input_dim, 4096])) + biases1
+            hidden = tf.nn.relu(hidden)
+
+        # dropout
         with tf.variable_scope('do1'):
             hidden = tf.layers.dropout(hidden, rate=0.5)
 
-        # Second FC layer
+        # second fc layer 
         with tf.variable_scope('fc2'):
-            hidden = tf.layers.dense(hidden, 4096, activation=tf.nn.relu,
-                                     kernel_initializer=tf.contrib.layers.xavier_initializer())
+            weights2 = variable(
+                'weights', 
+                [4096 * 4096],
+                tf.contrib.layers.xavier_initializer())            
+            biases2 = variable(
+                'biases',
+                [4096],
+                tf.constant_initializer(0.0))
 
-        # Dropout
+            hidden = tf.matmul(hidden, tf.reshape(weights2, [4096, 4096])) + biases2
+            hidden = tf.nn.relu(hidden)
+
+        # dropout
         with tf.variable_scope('do2'):
             hidden = tf.layers.dropout(hidden, rate=0.5)
 
-        # Final FC layer
+        # last fc layer
         with tf.variable_scope('fc3'):
-            logits = tf.layers.dense(hidden, 10, activation=None,
-                                     kernel_initializer=tf.contrib.layers.xavier_initializer())
+            weights3 = variable(
+                'weights', 
+                [4096 * 10],
+                tf.contrib.layers.xavier_initializer())            
+            biases3 = variable(
+                'biases',
+                [10],
+                tf.constant_initializer(0.0))
+
+            logits = tf.matmul(hidden, tf.reshape(weights3, [4096, 10])) + biases3
 
         return logits
 

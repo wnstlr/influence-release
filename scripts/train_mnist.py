@@ -7,13 +7,16 @@ import numpy as np
 import IPython
 
 import tensorflow as tf
+import sys
+sys.path.append('../')
 
 import influence.experiments as experiments
 from influence.all_CNN_c import All_CNN_C
 
 from load_mnist import load_small_mnist, load_mnist
 
-
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 
 data_sets = load_small_mnist('data')    
 

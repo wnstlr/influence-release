@@ -22,7 +22,7 @@ from tensorflow.contrib.learn.python.learn.datasets import base
 from influence.dataset import DataSet
 import h5py
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 
 # First create the dataset object from the VGG features
 print("Loading Data...")
@@ -93,7 +93,8 @@ np.savez(
 print('Training done')
 """
 # Load the trained model
-model.load_checkpoint(499999)
+iter_to_load = 99999
+model.load_checkpoint(iter_to_load)
 
 # compute influence values for the set of test points
 test_indices = [6]

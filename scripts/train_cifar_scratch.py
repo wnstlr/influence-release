@@ -18,9 +18,24 @@ from load_mnist import load_small_mnist, load_mnist
 from load_cifar import *
 from gen_vgg_features import *
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '2'
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 
-data_sets = generate_vgg_features()
+# First create the dataset object from the VGG features
+print("Loading Data...")
+#with open('output_31_train_features.pkl', 'rb') as f:
+#    x_train = pickle.load(f)
+#with open('output_31_test_features.pkl', 'rb') as f:
+#    x_test = pickle.load(f)
+
+hf = h5py.File('data/vgg_features_cifar.h5', 'r')
+x_train = np.array(hf.get('train'))
+x_test = np.array(hf.get('test'))
+hf.close()
+
+y_train, y_test = load_cifar_labels()
+train = DataSet(x_train, y_train.flatten())
+test = DataSet(x_test, y_test.flatten())
+data_sets = base.Datasets(train=train, validation=None, test=test)
 
 num_classes = 10
 input_side = 224
@@ -88,7 +103,7 @@ model.load_checkpoint(499999)
 # compute influence values for the set of test points
 test_indices = [6]
 
-num_train = len(.data_sets.train.labels)
+num_train = len(model.data_sets.train.labels)
 influences = None
 
 for test_idx in test_indices:
