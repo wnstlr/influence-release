@@ -8,7 +8,6 @@ from influence.dataset import DataSet
 from keras.datasets import cifar10
 
 
-
 def load_cifar():
     (x_train, y_train), (x_test, y_test) = cifar10.load_data()
     x_train = x_train.transpose(0,2,3,1)
@@ -19,3 +18,6 @@ def load_cifar():
 
     return base.Datasets(train=train, validation=validation, test=test)
 
+def load_cifar_labels():
+    (_, y_train), (_, y_test) = cifar10.load_data()
+    return y_train, y_test

@@ -12,39 +12,44 @@ sys.path.append('../')
 
 import influence.experiments as experiments
 from influence.all_CNN_c import All_CNN_C
-from influence.cifar_cnn import CIFAR_CNN
+from influence.cifar_mlp import CIFAR_MLP
+import pickle
 
 from load_mnist import load_small_mnist, load_mnist
 from load_cifar import *
 from gen_vgg_features import *
+from tensorflow.contrib.learn.python.learn.datasets import base
+from influence.dataset import DataSet
+import h5py
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '2'
+os.environ["CUDA_VISIBLE_DEVICES"] = '3'
 
-data_sets = generate_vgg_features()
+# First create the dataset object from the VGG features
+print("Loading Data...")
+#with open('output_31_train_features.pkl', 'rb') as f:
+#    x_train = pickle.load(f)
+#with open('output_31_test_features.pkl', 'rb') as f:
+#    x_test = pickle.load(f)
+
+hf = h5py.File('vgg_features.h5', 'r')
+x_train = np.array(hf.get('train'))
+x_test = np.array(hf.get('test'))
+hf.close()
+
+y_train, y_test = load_cifar_labels()
+train = DataSet(x_train, y_train.flatten())
+test = DataSet(x_test, y_test.flatten())
+data_sets = base.Datasets(train=train, validation=None, test=test)
 
 num_classes = 10
-input_side = 224
-input_channels = 3
-input_dim = input_side * input_side * input_channels 
 weight_decay = 0.001
 batch_size = 500
 
 initial_learning_rate = 0.0001 
 decay_epochs = [10000, 20000]
-hidden1_units = 128
-hidden2_units = 128
-hidden3_units = 128
-conv_patch_size = 3
-keep_probs = [1.0, 1.0]
 
-
-model = CIFAR_CNN(
-    input_side=input_side, 
-    input_channels=input_channels,
-    conv_patch_size=conv_patch_size,
-    hidden1_units=hidden1_units, 
-    hidden2_units=hidden2_units,
-    hidden3_units=hidden3_units,
+model = CIFAR_MLP(
+    input_dim=25088,
     weight_decay=weight_decay,
     num_classes=num_classes, 
     batch_size=batch_size,
@@ -55,7 +60,7 @@ model = CIFAR_CNN(
     mini_batch=True,
     train_dir='output', 
     log_dir='log',
-    model_name='cifar_all_cnn_c')
+    model_name='cifar_mlp')
 
 num_steps = 500000
 model.train(
@@ -64,6 +69,9 @@ model.train(
     iter_to_switch_to_sgd=10000000)
 iter_to_load = num_steps - 1
 
+print('Training done')
+
+"""
 test_idx = 6
 
 actual_loss_diffs, predicted_loss_diffs, indices_to_remove = experiments.test_retraining(
@@ -82,13 +90,15 @@ np.savez(
     indices_to_remove=indices_to_remove
     )
 
+print('Training done')
+"""
 # Load the trained model
 model.load_checkpoint(499999)
 
 # compute influence values for the set of test points
 test_indices = [6]
 
-num_train = len(.data_sets.train.labels)
+num_train = len(model.data_sets.train.labels)
 influences = None
 
 for test_idx in test_indices:
@@ -102,4 +112,4 @@ for test_idx in test_indices:
     else:
         influences = influence                                                                                                                                                                                                
 
-np.savez('output/cifar_inf_test%s'%(test_indices), influences=influences)
+np.savez('output/cifar_inf_test_mlp%s'%(test_indices), influences=influences)

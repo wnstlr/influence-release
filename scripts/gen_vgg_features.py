@@ -1,0 +1,143 @@
+# -*- coding: utf-8 -*-
+
+from keras.models import Sequential
+from keras.optimizers import SGD
+from keras.layers import Input, Dense, Conv2D, Convolution2D, MaxPooling2D, AveragePooling2D, ZeroPadding2D, Dropout, Flatten, merge, Reshape, Activation
+from keras.models import Model
+
+from utils import *
+from keras import backend as K
+K.set_image_dim_ordering('th')
+import numpy as np
+import tensorflow as tf
+import pickle, os
+import sys
+sys.path.append('../')
+
+from tensorflow.contrib.learn.python.learn.datasets import base
+from influence.dataset import DataSet
+from utils import *
+import h5py
+
+os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+
+def vgg16_model(img_rows, img_cols, channel=1, num_classes=None):
+    """VGG 16 Model for Keras
+
+    Model Schema is based on
+    https://gist.github.com/baraldilorenzo/07d7802847aaad0a35d3
+
+    ImageNet Pretrained Weights
+    https://drive.google.com/file/d/0Bz7KyqmuGsilT0J5dmRCM0ROVHc/view?usp=sharing
+
+    Parameters:
+      img_rows, img_cols - resolution of inputs
+      channel - 1 for grayscale, 3 for color
+      num_classes - number of categories for our classification task
+    """
+    model = Sequential()
+    model.add(ZeroPadding2D((1, 1), input_shape=(channel, img_rows, img_cols)))
+    model.add(Conv2D(64, (3, 3), activation='relu'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(64, (3, 3), activation='relu'))
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(128, (3, 3), activation='relu'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(128, (3, 3), activation='relu'))
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(256, (3, 3), activation='relu'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(256, (3, 3), activation='relu'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(256, (3, 3), activation='relu'))
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(512, (3, 3), activation='relu'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(512, (3, 3), activation='relu'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(512, (3, 3), activation='relu'))
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(512, (3, 3), activation='relu'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(512, (3, 3), activation='relu'))
+    model.add(ZeroPadding2D((1, 1)))
+    model.add(Conv2D(512, (3, 3), activation='relu'))
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+
+    # Add Fully Connected Layer
+    model.add(Flatten())
+    model.add(Dense(4096, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(4096, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(1000, activation='softmax'))
+
+    # Loads ImageNet pre-trained data
+    #model.load_weights('imagenet_models/vgg16_weights_th_dim_ordering_th_kernels.h5')
+
+    # Truncate and replace softmax layer for transfer learning
+    model.layers.pop()
+    model.outputs = [model.layers[-1].output]
+    model.layers[-1].outbound_nodes = []
+    model.add(Dense(num_classes, activation='softmax'))
+
+    # Uncomment below to set the first 10 layers to non-trainable (weights will not be updated)
+    #for layer in model.layers[:10]:
+    #    layer.trainable = False
+
+    # Learning rate is changed to 0.001
+    sgd = SGD(lr=1e-4, decay=1e-6, momentum=0.9, nesterov=True)
+    model.compile(optimizer=sgd, loss='categorical_crossentropy', metrics=['accuracy'])
+
+    return model
+
+def generate_vgg_features():
+
+    num_classes = 10
+    batch_size = 50
+    base = 0
+    nb_epoch = 10
+    num_test = 10000
+    num_train = 50000
+    channel = 3
+    img_rows = 224
+    img_cols = 224
+
+    # Load our model
+    #K.set_learning_phase(1)
+    model = vgg16_model(img_rows, img_cols, channel, num_classes)
+    model.summary()
+    model.load_weights('../../XAI/fine_tune_relu.h5')
+    X_train, Y_train, X_valid, Y_valid = \
+            load_cifar10_data(img_rows, img_cols)
+    print('Load done')
+    gen_feature_model = Model(inputs=model.input, outputs=model.layers[31].output)
+    print('model_defined')
+
+    hf = h5py.File('vgg_features.h5', 'w')
+    train_features = gen_feature_model.predict(X_train)
+    print('prediction done')
+    #pickle.dump(train_features, open('output_31_train_features.pkl', 'wb'))
+    hf.create_dataset('train', data=train_features)
+    print('saving done')
+    test_features = gen_feature_model.predict(X_valid)
+    print('prediction done')
+    hf.create_dataset('test', data=test_features)
+    hf.close()
+    #pickle.dump(test_features, open('output_31_test_features.pkl', 'wb'))
+    print('saving done')
+
+    #train = DataSet(train_features, Y_train.flatten())
+    #test = DataSet(test_features, Y_valid.flatten())
+    #return base.Datasets(train=train, validation=None, test=test)
+
+if __name__ == '__main__':
+    generate_vgg_features()
