@@ -31,7 +31,7 @@ print("Loading Data...")
 #with open('output_31_test_features.pkl', 'rb') as f:
 #    x_test = pickle.load(f)
 
-hf = h5py.File('vgg_features.h5', 'r')
+hf = h5py.File('data/vgg_features_cifar.h5', 'r')
 x_train = np.array(hf.get('train'))
 x_test = np.array(hf.get('test'))
 hf.close()
@@ -45,7 +45,7 @@ num_classes = 10
 weight_decay = 0.001
 batch_size = 500
 
-initial_learning_rate = 0.0001 
+initial_learning_rate = 0.00001 
 decay_epochs = [10000, 20000]
 
 model = CIFAR_MLP(
