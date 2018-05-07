@@ -22,7 +22,7 @@ from tensorflow.contrib.learn.python.learn.datasets import base
 from influence.dataset import DataSet
 import h5py
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 # First create the dataset object from the VGG features
 print("Loading Data...")
@@ -31,7 +31,8 @@ print("Loading Data...")
 #with open('output_31_test_features.pkl', 'rb') as f:
 #    x_test = pickle.load(f)
 
-hf = h5py.File('data/vgg_features_cifar.h5', 'r')
+idx = 34
+hf = h5py.File('data/vgg_features_cifar_%d.h5'%idx, 'r')
 x_train = np.array(hf.get('train'))
 x_test = np.array(hf.get('test'))
 hf.close()
@@ -47,9 +48,11 @@ batch_size = 500
 
 initial_learning_rate = 0.00001 
 decay_epochs = [10000, 20000]
+input_dim = x_train.shape[1]
 
 model = CIFAR_MLP(
-    input_dim=25088,
+    input_dim=input_dim,
+    idx = idx,
     weight_decay=weight_decay,
     num_classes=num_classes, 
     batch_size=batch_size,
@@ -60,13 +63,18 @@ model = CIFAR_MLP(
     mini_batch=True,
     train_dir='output', 
     log_dir='log',
-    model_name='cifar_mlp')
+    model_name='cifar_mlp_%d'%idx)
 
-num_steps = 500000
-model.train(
-    num_steps=num_steps, 
-    iter_to_switch_to_batch=10000000,
-    iter_to_switch_to_sgd=10000000)
+if idx == 31:
+    num_steps = 500000
+else:
+    # if doing with simpler features
+    num_steps = 300000
+
+#model.train(
+#    num_steps=num_steps, 
+#    iter_to_switch_to_batch=10000000,
+#    iter_to_switch_to_sgd=10000000)
 iter_to_load = num_steps - 1
 
 print('Training done')
@@ -93,11 +101,10 @@ np.savez(
 print('Training done')
 """
 # Load the trained model
-iter_to_load = 99999
 model.load_checkpoint(iter_to_load)
 
 # compute influence values for the set of test points
-test_indices = [6]
+test_indices = range(1000)
 
 num_train = len(model.data_sets.train.labels)
 influences = None
@@ -113,4 +120,7 @@ for test_idx in test_indices:
     else:
         influences = influence                                                                                                                                                                                                
 
-np.savez('output/cifar_inf_test_mlp%s'%(test_indices), influences=influences)
+if len(test_indices) > 10:
+    np.savez('output/cifar_inf_test_mlp_%d_many'%(idx), influences=influences)
+else:
+    np.savez('output/cifar_inf_test_mlp_%d_%s'%(idx, test_indices), influences=influences)

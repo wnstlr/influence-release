@@ -99,7 +99,10 @@ def vgg16_model(img_rows, img_cols, channel=1, num_classes=None):
 
     return model
 
-def generate_vgg_features():
+def generate_vgg_features(idx):
+    # idx = 31 for post conv layers
+    # idx 32 for after first fc layer
+    # idx 34 for after second fc layer
 
     num_classes = 10
     batch_size = 50
@@ -119,10 +122,10 @@ def generate_vgg_features():
     X_train, Y_train, X_valid, Y_valid = \
             load_cifar10_data(img_rows, img_cols)
     print('Load done')
-    gen_feature_model = Model(inputs=model.input, outputs=model.layers[31].output)
+    gen_feature_model = Model(inputs=model.input, outputs=model.layers[idx].output)
     print('model_defined')
 
-    hf = h5py.File('vgg_features.h5', 'w')
+    hf = h5py.File('data/vgg_features_cifar_%d.h5'%idx, 'w')
     train_features = gen_feature_model.predict(X_train)
     print('prediction done')
     #pickle.dump(train_features, open('output_31_train_features.pkl', 'wb'))
@@ -140,4 +143,4 @@ def generate_vgg_features():
     #return base.Datasets(train=train, validation=None, test=test)
 
 if __name__ == '__main__':
-    generate_vgg_features()
+    generate_vgg_features(32)
