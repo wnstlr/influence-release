@@ -91,3 +91,26 @@ def find_distances(target, X, theta=None):
         
         # Project onto theta
         return np.abs((X - target).dot(theta))    
+
+
+def sample_random(X, Y, no_per_class=2000, seed=0):     
+    """
+    Randomly sample the datapoints per each class
+    """
+    assert(X.shape[0] == Y.shape[0])
+    assert(len(Y.shape) == 1)
+    Y = Y.astype(int)                                                                                                                                                                                                                     
+
+    total_idx = []
+    # Sample for each digit                                                                                        
+    for i in xrange(10): 
+        idx = np.where(Y == i)[0]
+        assert(idx.shape[0] > no_per_class)                                                                        
+        np.random.seed(seed)
+        tmp = np.random.choice(idx, no_per_class, replace=False)                                                   
+        idx_to_keep = list(tmp)
+        total_idx += idx_to_keep                                                                                   
+    
+    #assert(len(total_idx) == 10 * no_per_class)                                                                    
+    return X[total_idx, :], Y[total_idx]
+
