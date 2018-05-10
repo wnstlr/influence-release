@@ -6,7 +6,7 @@ import IPython
 from scipy.stats import pearsonr
 
 
-def get_try_check(model, X_train, Y_train, Y_train_flipped, X_test, Y_test):
+def get_try_check(model, X_train, Y_train, Y_train_flipped, X_test, Y_test, class_type='binary'):
     def try_check(idx_to_check, label):
         Y_train_fixed = np.copy(Y_train_flipped)
         Y_train_fixed[idx_to_check] = Y_train[idx_to_check]
@@ -29,13 +29,13 @@ def test_mislabeled_detection_batch(
     Y_train_flipped,
     X_test, Y_test, 
     train_losses, train_loo_influences,
-    num_flips, num_checks):    
+    num_flips, num_checks, class_type='binary'):    
 
     assert num_checks > 0
 
     num_train_examples = Y_train.shape[0] 
     
-    try_check = get_try_check(model, X_train, Y_train, Y_train_flipped, X_test, Y_test)
+    try_check = get_try_check(model, X_train, Y_train, Y_train_flipped, X_test, Y_test, class_type=class_type)
 
     # Pick by LOO influence    
     idx_to_check = np.argsort(train_loo_influences)[-num_checks:]
@@ -50,7 +50,6 @@ def test_mislabeled_detection_batch(
     fixed_random_results = try_check(idx_to_check, 'Random')
     
     return fixed_influence_loo_results, fixed_loss_results, fixed_random_results
-
 
 
 

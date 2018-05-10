@@ -1,5 +1,6 @@
 # Adapted from https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/learn/python/learn/datasets/mnist.py
-
+import sys
+sys.path.append('../')
 import gzip
 import numpy as np
 

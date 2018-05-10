@@ -27,100 +27,64 @@ np.random.seed(42)
 
 data_sets = load_mnist('data')
 
-# Filter out two classes
-pos_class = 1
-neg_class = 7
+exp_type = 'binary'
 
-X_train = data_sets.train.x
-Y_train = data_sets.train.labels
-X_test = data_sets.test.x
-Y_test = data_sets.test.labels
+if exp_type == 'binary':
+    # Filter out two classes
+    num_class = 2
+    pos_class = 1
+    neg_class = 7
 
-X_train, Y_train = dataset.filter_dataset(X_train, Y_train, pos_class, neg_class)
-X_test, Y_test = dataset.filter_dataset(X_test, Y_test, pos_class, neg_class)
+    X_train = data_sets.train.x
+    Y_train = data_sets.train.labels
+    X_test = data_sets.test.x
+    Y_test = data_sets.test.labels
 
-"""
-## If using CNN to train, 
-num_classes = 2
-input_side = 28
-input_channels = 1
-input_dim = input_side * input_side * input_channels 
-weight_decay = 0.001
-batch_size = 500
+    X_train, Y_train = dataset.filter_dataset(X_train, Y_train, pos_class, neg_class)
+    X_test, Y_test = dataset.filter_dataset(X_test, Y_test, pos_class, neg_class)
 
-initial_learning_rate = 0.001 
-decay_epochs = [10000, 20000]
-hidden1_units = 8
-hidden2_units = 8
-hidden3_units = 8
-conv_patch_size = 3
-keep_probs = [1.0, 1.0]
+    ## If using logistic regression to train
+    lr_train = DataSet(X_train, np.array((Y_train + 1) / 2, dtype=int))
+    lr_validation = None
+    lr_test = DataSet(X_test, np.array((Y_test + 1) / 2, dtype=int))
+    lr_data_sets = base.Datasets(train=lr_train, validation=lr_validation, test=lr_test)
 
-model = All_CNN_C(
-    input_side=input_side, 
-    input_channels=input_channels,
-    conv_patch_size=conv_patch_size,
-    hidden1_units=hidden1_units, 
-    hidden2_units=hidden2_units,
-    hidden3_units=hidden3_units,
-    weight_decay=weight_decay,
-    num_classes=num_classes, 
-    batch_size=batch_size,
-    data_sets=data_sets,
-    initial_learning_rate=initial_learning_rate,
-    damping=1e-2,
-    decay_epochs=decay_epochs,
-    mini_batch=True,
-    train_dir='output', 
-    log_dir='log',
-    model_name='mnist_small_%dvs%d_cnn'%(pos_class, neg_class))
+    num_classes = 2
+    input_side = 28
+    input_channels = 1
+    input_dim = input_side * input_side * input_channels
+    weight_decay = 0.01
+    batch_size = 100
+    initial_learning_rate = 0.001 
+    keep_probs = None
+    decay_epochs = [1000, 10000]
+    max_lbfgs_iter = 1000
 
-num_steps = 500000
-model.train(
-    num_steps=num_steps, 
-    iter_to_switch_to_batch=10000000,
-    iter_to_switch_to_sgd=10000000)
-iter_to_load = num_steps - 1
-"""
+    num_params = 784
 
-## If using logistic regression to train
-lr_train = DataSet(X_train, np.array((Y_train + 1) / 2, dtype=int))
-lr_validation = None
-lr_test = DataSet(X_test, np.array((Y_test + 1) / 2, dtype=int))
-lr_data_sets = base.Datasets(train=lr_train, validation=lr_validation, test=lr_test)
+    tf.reset_default_graph()
 
-num_classes = 2
-input_side = 28
-input_channels = 1
-input_dim = input_side * input_side * input_channels
-weight_decay = 0.01
-batch_size = 100
-initial_learning_rate = 0.001 
-keep_probs = None
-decay_epochs = [1000, 10000]
-max_lbfgs_iter = 1000
+    tf_model = BinaryLogisticRegressionWithLBFGS(
+        input_dim=input_dim,
+        weight_decay=weight_decay,
+        max_lbfgs_iter=max_lbfgs_iter,
+        num_classes=num_classes, 
+        batch_size=batch_size,
+        data_sets=lr_data_sets,
+        initial_learning_rate=initial_learning_rate,
+        keep_probs=keep_probs,
+        decay_epochs=decay_epochs,
+        mini_batch=False,
+        train_dir='output',
+        log_dir='log',
+        model_name='mnist-%dvs%d-logreg'%(pos_class, neg_class))
 
-num_params = 784
+    #tf_model.train()
+    tf_model.load_checkpoint(0)
 
-tf.reset_default_graph()
-
-tf_model = BinaryLogisticRegressionWithLBFGS(
-    input_dim=input_dim,
-    weight_decay=weight_decay,
-    max_lbfgs_iter=max_lbfgs_iter,
-    num_classes=num_classes, 
-    batch_size=batch_size,
-    data_sets=lr_data_sets,
-    initial_learning_rate=initial_learning_rate,
-    keep_probs=keep_probs,
-    decay_epochs=decay_epochs,
-    mini_batch=False,
-    train_dir='output',
-    log_dir='log',
-    model_name='mnist-%dvs%d-logreg'%(pos_class, neg_class))
-
-#tf_model.train()
-tf_model.load_checkpoint(0)
+else:
+    num_class = 10
+    pass
 
 ##############################################
 ### Flipping experiment
@@ -129,6 +93,34 @@ X_train = np.copy(tf_model.data_sets.train.x)
 Y_train = np.copy(tf_model.data_sets.train.labels)
 X_test = np.copy(tf_model.data_sets.test.x)
 Y_test = np.copy(tf_model.data_sets.test.labels) 
+
+## what percentage of data to corrupt
+perc = 0.4
+num_train_examples = Y_train.shape[0]
+num_random_seeds = 40
+num_to_flip = int(num_train_examples * perc)
+checkpoint = 6
+
+# select idx to corrupt
+np.random.seed(42)
+idx_to_flip = np.random.randint(num_train_examples, num_to_flip, replace=False)
+exp_results = dict()
+for i in range(num_random_seeds):
+    # repeat experiments 40 times
+    if exp_type == 'binary':
+        # binary
+        Y_train_flipped = np.copy(Y_train)
+        Y_train_flipped[idx_to_flip] = 1 - Y_train[idx_to_flip] 
+    else:
+        # multiclass
+        Y_train_flipped = np.copy(Y_train)
+        tmp = np.random.randint(num_class, size=num_to_flip)
+        Y_train_flipped[idx_to_flip] = tmp
+
+    for c in range(checkpoint):
+        # c is the porportion of the data to check 
+
+
 
 num_train_examples = Y_train.shape[0] 
 num_flip_vals = 6
