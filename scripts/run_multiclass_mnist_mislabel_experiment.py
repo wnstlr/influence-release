@@ -199,8 +199,6 @@ for exp_no in range(num_random_seeds):
     print('--Corrupted loss: %.5f. Accuracy: %.3f' % (
             flipped_results[exp_no, 1], flipped_results[exp_no, 2]))
 
-    continue
-
     for c in range(checkpoint):
         # c is the porportion of the data to check 
         num_checks = int(num_train_examples / 20) * (c + 1)
@@ -251,22 +249,22 @@ for exp_no in range(num_random_seeds):
         fixed_random_results[c, exp_no, :] = try_check(idx_to_check, 'Random')
 
         # Pick by our influencee
-        idx_to_check = np.argsort(ours_influences)[-num_checks:]
-        fixed_ours_results[c, exp_no, :] = try_check(idx_to_check, 'Ours')
+        idx_to_check = np.argsort(np.abs(ours_influences))[-num_checks:]
+        fixed_ours_results[c, exp_no, :] = try_check(idx_to_check, 'Ours Abs')
 
         # Pick by our influencee alhpa times input
-        idx_to_check = np.argsort(ours_influences_trains)[-num_checks:]
-        fixed_ours_train_results[c, exp_no, :] = try_check(idx_to_check, 'Ours with Train')
+        idx_to_check = np.argsort(np.abs(ours_influences_trains))[-num_checks:]
+        fixed_ours_train_results[c, exp_no, :] = try_check(idx_to_check, 'Ours Abs with Train')
 
         # Pick by our influencee alhpa times input
-        idx_to_check = np.argsort(ours_influences_avg)[-num_checks:]
-        fixed_ours_avg_results[c, exp_no, :] = try_check(idx_to_check, 'Ours with Avg')
-assert(False)
+        idx_to_check = np.argsort(np.abs(ours_influences_avg))[-num_checks:]
+        fixed_ours_avg_results[c, exp_no, :] = try_check(idx_to_check, 'Ours Abs with Avg')
+
 print('Done. Saving...')
 if exp_type == 'multiclass':
     file_name = 'mnist_multiclass_inputcheck_results.npz'
 else:
-    file_name = 'mnist_%dvs%d_inputcheck_results.npz'%(pos_class, neg_class)
+    file_name = 'mnist_%dvs%d_inputcheck_abs_results.npz'%(pos_class, neg_class)
 
 np.savez(
     'output/%s'%(file_name), 
