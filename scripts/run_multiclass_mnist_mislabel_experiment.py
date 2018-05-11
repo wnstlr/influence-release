@@ -48,11 +48,11 @@ if exp_type == 'binary':
 
     X_train, Y_train = dataset.filter_dataset(X_train, Y_train, pos_class, neg_class)
     X_test, Y_test = dataset.filter_dataset(X_test, Y_test, pos_class, neg_class)
-    np.savez('data/mnist_binary_%dvs%d_small.npz'%(pos_class, neg_class),
-              x_train = X_train,
-              y_train = Y_train,
-              x_test = X_test,
-              y_test = Y_test)
+    #np.savez('data/mnist_binary_%dvs%d_small.npz'%(pos_class, neg_class),
+    #          x_train = X_train,
+    #          y_train = Y_train,
+    #          x_test = X_test,
+    #          y_test = Y_test)
 
     ## If using logistic regression to train
     lr_train = DataSet(X_train, np.array((Y_train + 1) / 2, dtype=int))
@@ -167,11 +167,11 @@ for exp_no in range(num_random_seeds):
         ## Binary LR takes labels 0 and 1 only...
 
         # save the corrupted data
-        np.savez('data/mnist_%dvs%d_corrupt_%d'%(pos_class, neg_class, exp_no), 
-                 x_train = X_train,
-                 y_train = Y_train_flipped * 2 - 1,
-                 x_test = X_test,
-                 y_test = Y_test * 2 -1)
+        #np.savez('data/mnist_%dvs%d_corrupt_%d'%(pos_class, neg_class, exp_no), 
+        #         x_train = X_train,
+        #         y_train = Y_train_flipped * 2 - 1,
+        #         x_test = X_test,
+        #         y_test = Y_test * 2 -1)
 
     else:
         # multiclass
@@ -199,6 +199,8 @@ for exp_no in range(num_random_seeds):
     print('--Corrupted loss: %.5f. Accuracy: %.3f' % (
             flipped_results[exp_no, 1], flipped_results[exp_no, 2]))
 
+    continue
+
     for c in range(checkpoint):
         # c is the porportion of the data to check 
         num_checks = int(num_train_examples / 20) * (c + 1)
@@ -209,7 +211,7 @@ for exp_no in range(num_random_seeds):
             # get the influence and loss values
             train_losses = tf_model.sess.run(tf_model.indiv_loss_no_reg, feed_dict=tf_model.all_train_feed_dict)
             train_loo_influences = tf_model.get_loo_influences()
-            
+
             # TODO we need our influence here
             weight_fname = 'data/weight_matrix_mnist_binary_%d_27.pkl'%exp_no
             alpha = pickle.load(open(weight_fname, 'rb'))
@@ -259,7 +261,7 @@ for exp_no in range(num_random_seeds):
         # Pick by our influencee alhpa times input
         idx_to_check = np.argsort(ours_influences_avg)[-num_checks:]
         fixed_ours_avg_results[c, exp_no, :] = try_check(idx_to_check, 'Ours with Avg')
-
+assert(False)
 print('Done. Saving...')
 if exp_type == 'multiclass':
     file_name = 'mnist_multiclass_inputcheck_results.npz'
@@ -278,63 +280,3 @@ np.savez(
     fixed_ours_avg_results=fixed_ours_avg_results,
 )
 
-"""
-for flips_idx in range(num_flip_vals):
-    tmp_flips = dict()
-    for random_seed_idx in range(num_random_seeds):
-        
-        random_seed = flips_idx * (num_random_seeds * 3) + (random_seed_idx * 2)        
-        np.random.seed(random_seed)
-    
-        num_flips = int(num_train_examples / 10) * (flips_idx + 1)    
-        #num_flips = int(num_train_examples / 10) * (5 + 1)    
-        idx_to_flip = np.random.choice(num_train_examples, size=num_flips, replace=False)
-        Y_train_flipped = np.copy(Y_train)
-        Y_train_flipped[idx_to_flip] = 1 - Y_train[idx_to_flip] 
-
-        # Save the indicies that were flipped for this particular experiment
-        tmp_flips[random_seed_idx] = idx_to_flip
-        
-        tf_model.update_train_x_y(X_train, Y_train_flipped)
-        tf_model.train()        
-        flipped_results[flips_idx, random_seed_idx, 1:] = tf_model.sess.run(
-            [tf_model.loss_no_reg, tf_model.accuracy_op], 
-            feed_dict=tf_model.all_test_feed_dict)
-        print('Flipped loss: %.5f. Accuracy: %.3f' % (
-                flipped_results[flips_idx, random_seed_idx, 1], flipped_results[flips_idx, random_seed_idx, 2]))
-        
-        print(flips_idx, num_flips, num_train_examples)
-
-        train_losses = tf_model.sess.run(tf_model.indiv_loss_no_reg, feed_dict=tf_model.all_train_feed_dict)
-        train_loo_influences = tf_model.get_loo_influences()
-
-        for checks_idx in range(num_check_vals):
-            np.random.seed(random_seed + 1)
-            num_checks = int(num_train_examples / 10) * (checks_idx + 1)
-
-            print('### Flips: %s, rs: %s, checks: %s' % (num_flips, random_seed_idx, num_checks))
-
-            fixed_influence_loo_results[flips_idx, checks_idx, random_seed_idx, :], \
-              fixed_loss_results[flips_idx, checks_idx, random_seed_idx, :], \
-              fixed_random_results[flips_idx, checks_idx, random_seed_idx, :] \
-              = experiments.test_mislabeled_detection_batch(
-                tf_model, 
-                X_train, Y_train,
-                Y_train_flipped,
-                X_test, Y_test, 
-                train_losses, train_loo_influences,
-                num_flips, num_checks)
-
-    flipped_indices[flips_idx] = tmp_flips
-
-np.savez(
-    'output/mnist%dvs%d_labelfix_results'%(pos_class, neg_class), 
-    orig_results=orig_results,
-    flipped_results=flipped_results,
-    fixed_influence_loo_results=fixed_influence_loo_results,
-    fixed_loss_results=fixed_loss_results,
-    fixed_random_results=fixed_random_results,
-    fixed_ours_results=fixed_ours_results,
-    flipped_indices=flipped_indices
-)
-"""

@@ -17,7 +17,8 @@ import influence.dataset as dataset
 from influence.dataset import DataSet
 from influence.image_utils import plot_flat_bwimage, plot_flat_colorimage, plot_flat_colorgrad
 
-
+import sys
+sys.path.append('../')
 
 data_sets = load_mnist('data')
 
