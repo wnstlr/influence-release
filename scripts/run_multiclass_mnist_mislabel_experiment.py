@@ -23,6 +23,7 @@ from load_mnist import load_small_mnist, load_mnist
 from influence.experiments import get_try_check
 
 import tensorflow as tf
+import pickle
 
 np.random.seed(42)
 
@@ -41,10 +42,13 @@ if exp_type == 'binary':
     X_test = data_sets.test.x
     Y_test = data_sets.test.labels
 
+    # Comment this part out to work on the whole data for binary.
+    X_train, Y_train = dataset.sample_random(X_train, Y_train, no_per_class=1000)
+    X_test, Y_test = dataset.sample_random(X_test, Y_test, no_per_class=200)
+
     X_train, Y_train = dataset.filter_dataset(X_train, Y_train, pos_class, neg_class)
     X_test, Y_test = dataset.filter_dataset(X_test, Y_test, pos_class, neg_class)
-
-    np.savez('data/mnist_binary_%dvs%d.npz'%(pos_class, neg_class),
+    np.savez('data/mnist_binary_%dvs%d_small.npz'%(pos_class, neg_class),
               x_train = X_train,
               y_train = Y_train,
               x_test = X_test,
@@ -62,7 +66,7 @@ if exp_type == 'binary':
     input_dim = input_side * input_side * input_channels
     weight_decay = 0.01
     batch_size = 100
-    initial_learning_rate = 0.001 
+    initial_learning_rate = 0.001
     keep_probs = None
     decay_epochs = [1000, 10000]
     max_lbfgs_iter = 1000
@@ -111,6 +115,7 @@ else:
     # TODO define CNN clasifier here
     assert(False)
 
+print('Training complete')
 ##############################################
 ### Flipping experiment
 ##############################################
@@ -132,27 +137,42 @@ fixed_influence_loo_results = np.zeros(dims)
 fixed_loss_results = np.zeros(dims)
 fixed_random_results = np.zeros(dims)
 fixed_ours_results = np.zeros(dims)
-flipped_results = np.zeros(num_random_seeds, 3)
+fixed_ours_train_results = np.zeros(dims)
+fixed_ours_avg_results = np.zeros(dims) 
+flipped_results = np.zeros((num_random_seeds, 3))
 
 # Save the original result without flipping
 orig_results = tf_model.sess.run(
     [tf_model.loss_no_reg, tf_model.accuracy_op], 
     feed_dict=tf_model.all_test_feed_dict)
+
 print('Orig loss: %.5f. Accuracy: %.3f' % (orig_results[0], orig_results[1]))
 
 num_train_examples = Y_train.shape[0] 
 
 exp_results = dict()
 for exp_no in range(num_random_seeds):
+    print('--Experiment %d'%exp_no)
     # repeat experiments 10 times
     # select idx to corrupt
     np.random.seed(exp_no)
-    idx_to_flip = np.random.randint(num_train_examples, num_to_flip, replace=False)
+    idx_to_flip = np.random.choice(num_train_examples, num_to_flip, replace=False)
 
     if exp_type == 'binary':
         # binary
         Y_train_flipped = np.copy(Y_train)
-        Y_train_flipped[idx_to_flip] = 1 - Y_train[idx_to_flip] 
+        Y_train_flipped[idx_to_flip] = 1 - Y_train[idx_to_flip]
+
+        #assert(np.sum(Y_train_flipped[idx_to_flip] + Y_train[idx_to_flip]) == 0)
+        ## Binary LR takes labels 0 and 1 only...
+
+        # save the corrupted data
+        np.savez('data/mnist_%dvs%d_corrupt_%d'%(pos_class, neg_class, exp_no), 
+                 x_train = X_train,
+                 y_train = Y_train_flipped * 2 - 1,
+                 x_test = X_test,
+                 y_test = Y_test * 2 -1)
+
     else:
         # multiclass
         Y_train_flipped = np.copy(Y_train)
@@ -160,53 +180,85 @@ for exp_no in range(num_random_seeds):
         # TODO how to flip?
         Y_train_flipped[idx_to_flip] = tmp
 
+        # save the corrupted data
+        #np.savez('data/mnist_multiclass_corrupt_%d'%(exp_no), 
+        #         x_train = X_train,
+        #         y_train = Y_train_flipped * 2 -1,
+        #         x_test = X_test,
+        #         y_test = Y_test * 2 - 1)
+        #continue
+
     # Save the performance after corrupting the data
-    flipped_results[random_seed_idx, 1:] = tf_model.sess.run(
+    tf_model.update_train_x_y(X_train, Y_train_flipped)
+    tf_model.train()
+
+    flipped_results[exp_no, 1:] = tf_model.sess.run(
         [tf_model.loss_no_reg, tf_model.accuracy_op], 
         feed_dict=tf_model.all_test_feed_dict)
-    print('Corrupted loss: %.5f. Accuracy: %.3f' % (
+    print('--Corrupted %d points'%num_to_flip)
+    print('--Corrupted loss: %.5f. Accuracy: %.3f' % (
             flipped_results[exp_no, 1], flipped_results[exp_no, 2]))
 
     for c in range(checkpoint):
         # c is the porportion of the data to check 
         num_checks = int(num_train_examples / 20) * (c + 1)
-        try_check = get_try_check(model, X_train, Y_train, Y_train_flipped, X_test, Y_test, class_type=exp_type, retrain_no='%s-%s'%(exp_no, c))
+        print('---- checking %d points (%f of training examples)'%(num_checks, (c+1) / 20.))
+        try_check = get_try_check(tf_model, X_train, Y_train, Y_train_flipped, X_test, Y_test, class_type=exp_type, retrain_no='%s-%s'%(exp_no, c))
         
         if exp_type == 'binary':
             # get the influence and loss values
             train_losses = tf_model.sess.run(tf_model.indiv_loss_no_reg, feed_dict=tf_model.all_train_feed_dict)
-
-            # TODO this function is different for CNN..
             train_loo_influences = tf_model.get_loo_influences()
             
             # TODO we need our influence here
-            ours_influences = None
+            weight_fname = 'data/weight_matrix_mnist_binary_%d_27.pkl'%exp_no
+            alpha = pickle.load(open(weight_fname, 'rb'))
 
-            # Pick by LOO influence    
-            idx_to_check = np.argsort(train_loo_influences)[-num_checks:]
-            fixed_influence_loo_results = try_check(idx_to_check, 'Influence (LOO)')
-        
-            # Pick by top loss to fix
-            idx_to_check = np.argsort(np.abs(train_losses))[-num_checks:]    
-            fixed_loss_results = try_check(idx_to_check, 'Loss')
-        
-            # Randomly pick stuff to fix
-            idx_to_check = np.random.choice(num_train_examples, size=num_checks, replace=False)    
-            fixed_random_results = try_check(idx_to_check, 'Random')
-
-            # Pick by our influencee
-            idx_to_check = np.argsort(ours_influences)[-num_checks:]
-            fixed_ours_results = try_check(idx_to_check, 'Ours')
+            # Three metrics:
+            # 1. just alphas for one class
+            # 2. alpha * input * input
+            # 3. alpha averaged across all class
+            ours_influences = np.sum(alpha[0] * alpha[1], axis=1)
+            ours_influences_trains = ours_influences * np.sum(X_train * X_train, axis=1)
+            ours_influences_avg = np.mean(alpha[0], axis=1)
 
         elif exp_type == 'multiclass':
-            # TODO
-            pass
+            # get the influence and loss values
+            train_losses = tf_model.sess.run(tf_model.indiv_loss_no_reg, feed_dict=tf_model.all_train_feed_dict)
 
-        fixed_influence_loo_results[c, exp_no, :], \
-            fixed_loss_results[c, exp_no, :], \
-            fixed_random_results[c, exp_no, :] \
-            fixed_ours_results[c, exp_no, :] \
-            = fixed_influence_loo_results, fixed_loss_results, fixed_random_results, fixed_ours_results
+            # TODO this function is different from binary logistic regression for CNN
+            train_loo_influences = tf_model.get_loo_influences()
+
+            # TODO we need our influence here
+            weight_fname = ''
+            alpha = pickle.load(open(weight_fname, 'rb'))
+            ours_influences = np.sum(alpha[0] * alpha[1], axis=1)
+            ours_influences_trains = ours_influences * np.sum(X_train * X_train, axis=1)
+            ours_influences_avg = np.mean(alpha[0], axis=1)
+
+        # Pick by LOO influence    
+        idx_to_check = np.argsort(train_loo_influences)[-num_checks:]
+        fixed_influence_loo_results[c, exp_no, :] = try_check(idx_to_check, 'Influence (LOO)')
+    
+        # Pick by top loss to fix
+        idx_to_check = np.argsort(np.abs(train_losses))[-num_checks:]    
+        fixed_loss_results[c, exp_no, :] = try_check(idx_to_check, 'Loss')
+    
+        # Randomly pick stuff to fix
+        idx_to_check = np.random.choice(num_train_examples, size=num_checks, replace=False)    
+        fixed_random_results[c, exp_no, :] = try_check(idx_to_check, 'Random')
+
+        # Pick by our influencee
+        idx_to_check = np.argsort(ours_influences)[-num_checks:]
+        fixed_ours_results[c, exp_no, :] = try_check(idx_to_check, 'Ours')
+
+        # Pick by our influencee alhpa times input
+        idx_to_check = np.argsort(ours_influences_trains)[-num_checks:]
+        fixed_ours_train_results[c, exp_no, :] = try_check(idx_to_check, 'Ours with Train')
+
+        # Pick by our influencee alhpa times input
+        idx_to_check = np.argsort(ours_influences_avg)[-num_checks:]
+        fixed_ours_avg_results[c, exp_no, :] = try_check(idx_to_check, 'Ours with Avg')
 
 print('Done. Saving...')
 if exp_type == 'multiclass':
@@ -222,6 +274,8 @@ np.savez(
     fixed_loss_results=fixed_loss_results,
     fixed_random_results=fixed_random_results,
     fixed_ours_results=fixed_ours_results,
+    fixed_ours_train_results=fixed_ours_train_results,
+    fixed_ours_avg_results=fixed_ours_avg_results,
 )
 
 """

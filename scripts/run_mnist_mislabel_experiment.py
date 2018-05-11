@@ -137,6 +137,9 @@ for flips_idx in range(num_flip_vals):
         train_losses = tf_model.sess.run(tf_model.indiv_loss_no_reg, feed_dict=tf_model.all_train_feed_dict)
         train_loo_influences = tf_model.get_loo_influences()
         # TODO We need our influence here
+        alpha = pickle.load(open('data/weight_matrix_mnist_binary.pkl', 'rb'))
+        ours_influences = np.sum(alpha[0] * alpha[1], axis=1)
+        ours_influences_trains = ours_influences * np.sum(X_train * X_train, axis=1)
 
         for checks_idx in range(num_check_vals):
             np.random.seed(random_seed + 1)
