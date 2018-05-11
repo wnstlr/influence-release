@@ -103,14 +103,14 @@ def sample_random(X, Y, no_per_class=2000, seed=0):
 
     total_idx = []
     # Sample for each digit                                                                                        
-    for i in xrange(10): 
+    for i in range(10): 
         idx = np.where(Y == i)[0]
+        idx = idx.astype(int)
         assert(idx.shape[0] > no_per_class)                                                                        
         np.random.seed(seed)
         tmp = np.random.choice(idx, no_per_class, replace=False)                                                   
         idx_to_keep = list(tmp)
-        total_idx += idx_to_keep                                                                                   
-    
+        total_idx += idx_to_keep
     #assert(len(total_idx) == 10 * no_per_class)                                                                    
     return X[total_idx, :], Y[total_idx]
 

@@ -39,50 +39,6 @@ Y_test = data_sets.test.labels
 X_train, Y_train = dataset.filter_dataset(X_train, Y_train, pos_class, neg_class)
 X_test, Y_test = dataset.filter_dataset(X_test, Y_test, pos_class, neg_class)
 
-"""
-## If using CNN to train, 
-num_classes = 2
-input_side = 28
-input_channels = 1
-input_dim = input_side * input_side * input_channels 
-weight_decay = 0.001
-batch_size = 500
-
-initial_learning_rate = 0.001 
-decay_epochs = [10000, 20000]
-hidden1_units = 8
-hidden2_units = 8
-hidden3_units = 8
-conv_patch_size = 3
-keep_probs = [1.0, 1.0]
-
-model = All_CNN_C(
-    input_side=input_side, 
-    input_channels=input_channels,
-    conv_patch_size=conv_patch_size,
-    hidden1_units=hidden1_units, 
-    hidden2_units=hidden2_units,
-    hidden3_units=hidden3_units,
-    weight_decay=weight_decay,
-    num_classes=num_classes, 
-    batch_size=batch_size,
-    data_sets=data_sets,
-    initial_learning_rate=initial_learning_rate,
-    damping=1e-2,
-    decay_epochs=decay_epochs,
-    mini_batch=True,
-    train_dir='output', 
-    log_dir='log',
-    model_name='mnist_small_%dvs%d_cnn'%(pos_class, neg_class))
-
-num_steps = 500000
-model.train(
-    num_steps=num_steps, 
-    iter_to_switch_to_batch=10000000,
-    iter_to_switch_to_sgd=10000000)
-iter_to_load = num_steps - 1
-"""
-
 ## If using logistic regression to train
 lr_train = DataSet(X_train, np.array((Y_train + 1) / 2, dtype=int))
 lr_validation = None
@@ -139,6 +95,7 @@ dims = (num_flip_vals, num_check_vals, num_random_seeds, 3)
 fixed_influence_loo_results = np.zeros(dims)
 fixed_loss_results = np.zeros(dims)
 fixed_random_results = np.zeros(dims)
+fixed_our_results = np.zeros(dims)
 
 flipped_results = np.zeros((num_flip_vals, num_random_seeds, 3))
 
@@ -159,8 +116,7 @@ for flips_idx in range(num_flip_vals):
         random_seed = flips_idx * (num_random_seeds * 3) + (random_seed_idx * 2)        
         np.random.seed(random_seed)
     
-        num_flips = int(num_train_examples / 10) * (flips_idx + 1)    
-        #num_flips = int(num_train_examples / 10) * (5 + 1)    
+        num_flips = int(num_train_examples / 7) * (flips_idx + 1)    
         idx_to_flip = np.random.choice(num_train_examples, size=num_flips, replace=False)
         Y_train_flipped = np.copy(Y_train)
         Y_train_flipped[idx_to_flip] = 1 - Y_train[idx_to_flip] 
@@ -180,6 +136,7 @@ for flips_idx in range(num_flip_vals):
 
         train_losses = tf_model.sess.run(tf_model.indiv_loss_no_reg, feed_dict=tf_model.all_train_feed_dict)
         train_loo_influences = tf_model.get_loo_influences()
+        # TODO We need our influence here
 
         for checks_idx in range(num_check_vals):
             np.random.seed(random_seed + 1)
@@ -190,12 +147,13 @@ for flips_idx in range(num_flip_vals):
             fixed_influence_loo_results[flips_idx, checks_idx, random_seed_idx, :], \
               fixed_loss_results[flips_idx, checks_idx, random_seed_idx, :], \
               fixed_random_results[flips_idx, checks_idx, random_seed_idx, :] \
+              fixed_ours_results[flips_idx, checks_idx, random_seed_idx, :] \
               = experiments.test_mislabeled_detection_batch(
                 tf_model, 
                 X_train, Y_train,
                 Y_train_flipped,
                 X_test, Y_test, 
-                train_losses, train_loo_influences,
+                train_losses, train_loo_influences, ours_influences
                 num_flips, num_checks)
 
     flipped_indices[flips_idx] = tmp_flips
@@ -207,5 +165,6 @@ np.savez(
     fixed_influence_loo_results=fixed_influence_loo_results,
     fixed_loss_results=fixed_loss_results,
     fixed_random_results=fixed_random_results,
+    fixed_ours_results=fixed_ours_results,
     flipped_indices=flipped_indices
 )

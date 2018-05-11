@@ -6,12 +6,21 @@ import IPython
 from scipy.stats import pearsonr
 
 
-def get_try_check(model, X_train, Y_train, Y_train_flipped, X_test, Y_test, class_type='binary'):
+def get_try_check(model, X_train, Y_train, Y_train_flipped, X_test, Y_test, class_type='binary', retrain_no=''):
     def try_check(idx_to_check, label):
         Y_train_fixed = np.copy(Y_train_flipped)
         Y_train_fixed[idx_to_check] = Y_train[idx_to_check]
         model.update_train_x_y(X_train, Y_train_fixed)
-        model.train()
+        # Need to save a separate model whenever we retrain
+        # can do this by modifying the checkpoint path
+        #model.checkpoint_file = os.path.join(model.train_dir, "%s_%s-checkpoint" %(self.model_name, retrain_no))
+        if class_type == 'binary':
+            # logistic regression 
+            model.train()
+        else:
+            # CNN: train so that it will have at least one checkpoint
+            model.train(num_steps=100000)
+
         check_num = np.sum(Y_train_fixed != Y_train_flipped)
         check_loss, check_acc = model.sess.run(
             [model.loss_no_reg, model.accuracy_op], 
@@ -28,7 +37,7 @@ def test_mislabeled_detection_batch(
     X_train, Y_train,
     Y_train_flipped,
     X_test, Y_test, 
-    train_losses, train_loo_influences,
+    train_losses, train_loo_influences, ours_influences,
     num_flips, num_checks, class_type='binary'):    
 
     assert num_checks > 0
@@ -48,9 +57,12 @@ def test_mislabeled_detection_batch(
     # Randomly pick stuff to fix
     idx_to_check = np.random.choice(num_train_examples, size=num_checks, replace=False)    
     fixed_random_results = try_check(idx_to_check, 'Random')
-    
-    return fixed_influence_loo_results, fixed_loss_results, fixed_random_results
 
+    # Pick by our influence
+    idx_to_check = np.argsort(ours_influences)[-num_checks:]
+    fixed_ours_results = try_check(idx_to_check, 'Ours')
+
+    return fixed_influence_loo_results, fixed_loss_results, fixed_random_results, fixed_ours_results
 
 
 def viz_top_influential_examples(model, test_idx):
