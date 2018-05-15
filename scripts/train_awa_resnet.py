@@ -11,48 +11,37 @@ import os, sys
 sys.path.append('../')
 
 import influence.experiments as experiments
-from influence.all_CNN_c import All_CNN_C
-from influence.cifar_mlp import CIFAR_MLP
+from influence.awa_mlp import AWA_MLP
 import pickle
 
-from load_mnist import load_small_mnist, load_mnist
-from load_cifar import *
-from gen_vgg_features import *
 from tensorflow.contrib.learn.python.learn.datasets import base
 from influence.dataset import DataSet
 import h5py
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
-
 # First create the dataset object from the VGG features
 print("Loading Data...")
-#with open('output_31_train_features.pkl', 'rb') as f:
-#    x_train = pickle.load(f)
-#with open('output_31_test_features.pkl', 'rb') as f:
-#    x_test = pickle.load(f)
+x_train = np.squeeze(np.load('data/train_feature_awa.npy'))
+y_train = np.squeeze(np.load('data/train_output_awa.npy'))
+x_test = np.squeeze(np.load('data/val_feature_awa.npy'))
+y_test = np.squeeze(np.load('data/val_output_awa.npy'))
 
-idx = 34
-hf = h5py.File('data/vgg_features_cifar_%d.h5'%idx, 'r')
-x_train = np.array(hf.get('train'))
-x_test = np.array(hf.get('test'))
-hf.close()
-
-y_train, y_test = load_cifar_labels()
-train = DataSet(x_train, y_train.flatten())
-test = DataSet(x_test, y_test.flatten())
+# Get labels
+train_labels = np.argmax(y_train, axis=1)
+test_labels = np.argmax(y_test, axis=1)
+train = DataSet(x_train, train_labels)
+test = DataSet(x_test, test_labels)
 data_sets = base.Datasets(train=train, validation=None, test=test)
 
-num_classes = 10
+num_classes = 50
 weight_decay = 0.001
-batch_size = 500
+batch_size = 290
 
 initial_learning_rate = 0.00001 
 decay_epochs = [10000, 20000]
 input_dim = x_train.shape[1]
 
-model = CIFAR_MLP(
+model = AWA_MLP(
     input_dim=input_dim,
-    idx = idx,
     weight_decay=weight_decay,
     num_classes=num_classes, 
     batch_size=batch_size,
@@ -60,17 +49,12 @@ model = CIFAR_MLP(
     initial_learning_rate=initial_learning_rate,
     damping=1e-2,
     decay_epochs=decay_epochs,
-    mini_batch=True,
+    mini_batch=False,
     train_dir='output', 
     log_dir='log',
-    model_name='cifar_mlp_%d'%idx)
+    model_name='awa_mlp')
 
-if idx == 31:
-    num_steps = 500000
-else:
-    # if doing with simpler features
-    num_steps = 300000
-
+num_steps = 300000
 #model.train(
 #    num_steps=num_steps, 
 #    iter_to_switch_to_batch=10000000,
@@ -79,34 +63,20 @@ iter_to_load = num_steps - 1
 
 print('Training done')
 
-"""
-test_idx = 6
-
-actual_loss_diffs, predicted_loss_diffs, indices_to_remove = experiments.test_retraining(
-    model, 
-    test_idx=test_idx, 
-    iter_to_load=iter_to_load, 
-    num_to_remove=100,
-    num_steps=30000, 
-    remove_type='maxinf',
-    force_refresh=True)
-
-np.savez(
-    'output/cifar_all_cnn_c_iter-500k_retraining-100.npz', 
-    actual_loss_diffs=actual_loss_diffs, 
-    predicted_loss_diffs=predicted_loss_diffs, 
-    indices_to_remove=indices_to_remove
-    )
-
-print('Training done')
-"""
 # Load the trained model
 model.load_checkpoint(iter_to_load)
 
 # compute influence values for the set of test points
-test_indices = range(1000)
+# For AWA, just for the first 100 test points
 
 num_train = len(model.data_sets.train.labels)
+num_test = len(model.data_sets.test.labels)
+
+num_select = 1000
+np.random.seed(42)
+test_indices = np.random.choice(num_test, num_select, replace=False)
+np.savez('output/idx_inf_awa_%d.npz'%num_select, idx=test_indices)
+
 influences = None
 
 for test_idx in test_indices:
@@ -121,6 +91,6 @@ for test_idx in test_indices:
         influences = influence                                                                                                                                                                                                
 
 if len(test_indices) > 10:
-    np.savez('output/cifar_inf_test_mlp_%d_many'%(idx), influences=influences)
+    np.savez('output/awa_inf_test_many_%d'%(num_select), influences=influences)
 else:
-    np.savez('output/cifar_inf_test_mlp_%d_%s'%(idx, test_indices), influences=influences)
+    np.savez('output/awa_inf_test_%s'%(test_indices), influences=influences)
